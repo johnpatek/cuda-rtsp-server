@@ -26,5 +26,3 @@ target_link_libraries(
     PkgConfig::GLIB
     PkgConfig::CUDA
     )
-
-add_subdirectory(example)
