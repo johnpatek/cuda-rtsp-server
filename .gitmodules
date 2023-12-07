@@ -1,0 +1,6 @@
+[submodule "example/sigfn"]
+	path = example/sigfn
+	url = https://github.com/johnpatek/sigfn
+[submodule "example/eglext-loader"]
+	path = example/eglext-loader
+	url = https://github.com/johnpatek/eglext-loader
