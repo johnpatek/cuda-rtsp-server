@@ -17,7 +17,8 @@ add_library(cudartsp SHARED cuda_rtsp.c)
 target_include_directories(cudartsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
-    cudartsp 
+    cudartsp
+    PUBLIC 
     PkgConfig::GSTREAMER 
     PkgConfig::GSTREAMER-APP
     PkgConfig::GSTREAMER-CUDA
