@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.0)
 
 project(cuda-rtsp-server)
 
+option(CUDA_RTSP_EXAMPLE "Build example program" OFF)
+
 find_package(PkgConfig REQUIRED)
 pkg_search_module(GSTREAMER REQUIRED IMPORTED_TARGET gstreamer-1.0)
 pkg_search_module(GSTREAMER-APP REQUIRED IMPORTED_TARGET gstreamer-app-1.0)
@@ -27,3 +29,7 @@ target_link_libraries(
     PkgConfig::GLIB
     PkgConfig::CUDA
     )
+
+if(${CUDA_RTSP_EXAMPLE})
+    add_subdirectory(example)
+endif()

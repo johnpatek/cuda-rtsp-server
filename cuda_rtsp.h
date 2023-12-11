@@ -6,6 +6,8 @@ extern "C"
 {
 #endif
 
+#include <stdbool.h>
+
 #include <cuda.h>
 
 #ifdef CU_RTSP_EXPOSE_GMAIN
@@ -26,9 +28,19 @@ extern "C"
         CU_RTSP_FORMAT_RGBA,
         CU_RTSP_FORMAT_Y444,
         CU_RTSP_FORMAT_VUYA,
+        CU_RTSP_FORMAT_ARGB,
+        CU_RTSP_FORMAT_ABGR,
+        CU_RTSP_FORMAT_BGR,
+        CU_RTSP_FORMAT_RGB,
     } CUrtsp_format;
 
     typedef void(CUDA_CB *CUrtspWriteCallback)(CUdeviceptr, size_t, void *);
+
+    typedef struct CUDA_RTSP_SERVER_st
+    {
+        const char *host;
+        uint16_t port;
+    } CUDA_RTSP_SERVER;
 
     typedef struct CUDA_RTSP_SESSION_st
     {
@@ -39,6 +51,7 @@ extern "C"
         CUrtsp_format format;
         size_t fpsNum;
         size_t fpsDen;
+        bool live;
         CUrtspWriteCallback writeCallback;
         void *userData;
     } CUDA_RTSP_SESSION;
@@ -49,7 +62,7 @@ extern "C"
 
     const char *cuRTSPGetError();
 
-    CUresult cuRTSPServerCreate(CUrtsp_server *pServer, uint16_t port);
+    CUresult cuRTSPServerCreate(CUrtsp_server *pServer, const CUDA_RTSP_SERVER *pCreateServer);
 
     void cuRTSPServerDestroy(CUrtsp_server hServer);
 
@@ -63,7 +76,7 @@ extern "C"
     CUresult cuRTSPServerAttachGMain(CUrtsp_server hServer, GMainContext *context);
 #endif
 
-    CUresult cuRTSPSessionCreate(CUrtsp_session *pSession, CUDA_RTSP_SESSION *pCreateSession);
+    CUresult cuRTSPSessionCreate(CUrtsp_session *pSession, const CUDA_RTSP_SESSION *pCreateSession);
 
     CUresult cuRTSPSessionMount(CUrtsp_session hSession, CUrtsp_server hServer, const char *path);
 

@@ -20,6 +20,10 @@ const char *FORMATS[] = {
     "RGBA",
     "Y444",
     "VUYA",
+    "ARGB",
+    "ABGR",
+    "BGR",
+    "RGB",
 };
 
 typedef struct CUrtsp_server_st
@@ -40,9 +44,14 @@ typedef struct CUrtsp_session_st
     GstClockTime timestamp;
 } CUrtsp_session_st;
 
+// error buffer
 char current_error[256];
 
+// set contents of error buffer
 static void cuRTSPSetError(const char *format, ...);
+
+// check if video format requires cudaconvert element
+static bool cuRTSPSessionNeedsConvert(CUrtsp_format format);
 
 static void cuRTSPSessionConfigure(
     GstRTSPMediaFactory *factory,
@@ -81,7 +90,7 @@ const char *cuRTSPGetError()
     return result;
 }
 
-CUresult cuRTSPServerCreate(CUrtsp_server *pServer, uint16_t port)
+CUresult cuRTSPServerCreate(CUrtsp_server *pServer, const CUDA_RTSP_SERVER *pCreateServer)
 {
     CUresult result;
     char service[7];
@@ -98,17 +107,18 @@ CUresult cuRTSPServerCreate(CUrtsp_server *pServer, uint16_t port)
     (*pServer) = calloc(1, sizeof(struct CUrtsp_server_st));
     (*pServer)->loop = NULL;
     (*pServer)->gst_rtsp_server = gst_rtsp_server_new();
-    if (port != CU_RTSP_DEFAULT_PORT)
+    if (pCreateServer != NULL && pCreateServer->port != CU_RTSP_DEFAULT_PORT)
     {
-        if (port < 1 || port > 65535)
+        if (pCreateServer->port < 1 || pCreateServer->port > 65535)
         {
             result = CUDA_ERROR_INVALID_VALUE;
             cuRTSPSetError("cuRTSPServerCreate: port value must be [1,65535]");
             goto error;
         }
-        snprintf(service, sizeof(service) / sizeof(service[0]), "%d", (int)port);
+        snprintf(service, sizeof(service) / sizeof(service[0]), "%d", (int)pCreateServer->port);
         gst_rtsp_server_set_service((*pServer)->gst_rtsp_server, service);
     }
+
     goto done;
 error:
     if ((*pServer) != NULL)
@@ -167,11 +177,14 @@ void cuRTSPServerShutdown(CUrtsp_server hServer)
     g_main_loop_quit(hServer->loop);
 }
 
-CUresult cuRTSPSessionCreate(CUrtsp_session *pSession, CUDA_RTSP_SESSION *pCreateSession)
+CUresult cuRTSPSessionCreate(CUrtsp_session *pSession, const CUDA_RTSP_SESSION *pCreateSession)
 {
+    const char *launch_string_no_convert = "( appsrc name=source ! nvh264enc ! rtph264pay name=pay0 pt=96 )";
+    const char *launch_string_with_convert = "( appsrc name=source ! cudaconvert ! nvh264enc ! rtph264pay name=pay0 pt=96 )";
     CUresult result;
     GstStructure *s;
     gint device_id;
+    const char *launch_string;
 
     result = CUDA_SUCCESS;
 
@@ -185,6 +198,15 @@ CUresult cuRTSPSessionCreate(CUrtsp_session *pSession, CUDA_RTSP_SESSION *pCreat
     {
         cuRTSPSetError("cuRTSPSessionCreate: pCreateSession cannot be NULL");
         goto error;
+    }
+
+    if (cuRTSPSessionNeedsConvert(pCreateSession->format))
+    {
+        launch_string = launch_string_with_convert;
+    }
+    else
+    {
+        launch_string = launch_string_no_convert;
     }
 
     *pSession = calloc(1, sizeof(CUrtsp_session_st));
@@ -205,7 +227,8 @@ CUresult cuRTSPSessionCreate(CUrtsp_session *pSession, CUDA_RTSP_SESSION *pCreat
     gst_structure_set(s, GST_CUDA_CONTEXT_TYPE, GST_TYPE_CUDA_CONTEXT,
                       (*pSession)->gst_cuda_context, "cuda-device-id", G_TYPE_INT, device_id, NULL);
     (*pSession)->cu_buffer_pool = gst_cuda_buffer_pool_new((*pSession)->gst_cuda_context);
-    gst_rtsp_media_factory_set_launch((*pSession)->gst_rtsp_media_factory, "( appsrc name=source ! nvh264enc ! rtph264pay name=pay0 pt=96 )");
+    gst_rtsp_media_factory_set_launch((*pSession)->gst_rtsp_media_factory, launch_string);
+    gst_rtsp_media_factory_set_enable_rtcp((*pSession)->gst_rtsp_media_factory, (pCreateSession->live) ? FALSE : TRUE);
     g_signal_connect((*pSession)->gst_rtsp_media_factory, "media-configure", (GCallback)cuRTSPSessionConfigure, *pSession);
     goto done;
 error:
@@ -327,4 +350,27 @@ static void cuRTSPSessionPushBuffer(
 static void cuRTSPSessionDestroy(
     CUrtsp_session hSession)
 {
+}
+
+bool cuRTSPSessionNeedsConvert(CUrtsp_format format)
+{
+    bool result;
+
+    switch (format)
+    {
+    case CU_RTSP_FORMAT_NV12:
+    case CU_RTSP_FORMAT_YV12:
+    case CU_RTSP_FORMAT_I420:
+    case CU_RTSP_FORMAT_BGRA:
+    case CU_RTSP_FORMAT_RGBA:
+    case CU_RTSP_FORMAT_Y444:
+    case CU_RTSP_FORMAT_VUYA:
+        result = false;
+        break;
+    default:
+        result = true;
+        break;
+    }
+
+    return result;
 }
