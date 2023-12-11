@@ -3,13 +3,6 @@
 
 #include <sigfn.h>
 
-struct thread_data
-{
-    struct egl_application *application;
-};
-
-static void render(void *user_data);
-
 static void copy_frame(CUdeviceptr buffer, size_t size, void *user_data);
 
 static void handle_signal(int signum, void *user_data);
@@ -21,6 +14,7 @@ int main(int argc, const char **argv)
     CUrtsp_server cu_server;
     CUrtsp_session cu_session;
     struct egl_application *application;
+    bool running;
 
     eglext_load();
 
@@ -50,29 +44,29 @@ int main(int argc, const char **argv)
     assert(cuRTSPSessionMount(cu_session, cu_server, "/test") == CUDA_SUCCESS);
     assert(cuRTSPServerAttach(cu_server) == CUDA_SUCCESS);
 
-    sigfn_handle(SIGINT, handle_signal, cu_server);
-    sigfn_handle(SIGTERM, handle_signal, cu_server);
+    sigfn_handle(SIGINT, handle_signal, &running);
+    sigfn_handle(SIGTERM, handle_signal, &running);
 
-    cuRTSPServerDispatch(cu_server);
+    running = true;
+    while(running)
+    {
+        egl_application_render(application);
+    }
+
+    cuRTSPServerDestroy(cu_server);
 
     cuRTSPDeinit();
+    
     return 0;
-}
-
-static void render(void *user_data)
-{
-    struct egl_application *const application = (struct egl_application *)user_data;
-    egl_application_render(application);
 }
 
 void copy_frame(CUdeviceptr buffer, size_t size, void *user_data)
 {
     struct egl_application *const application = (struct egl_application *)user_data;
-    egl_application_render(application);
     egl_application_copy_frame(application, buffer, size);
 }
 
 void handle_signal(int signum, void *user_data)
 {
-    cuRTSPServerShutdown((CUrtsp_server)user_data);
+    *(bool*)user_data = false;
 }
